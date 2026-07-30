@@ -18,7 +18,7 @@
       justify-content: center; 
       align-items: center;
       min-height: 100vh;
-      min-height: 100dvh; /* 모바일 동적 높이 대응 */
+      min-height: 100dvh;
       overflow: hidden;
     }
     #game-container {
@@ -27,7 +27,7 @@
       height: 95vh;
       height: 95dvh;
       max-height: 800px;
-      min-height: 580px; /* 모바일에서 너무 작아지지 않도록 최소 세로 크기 고정 */
+      min-height: 580px;
       background: #ffffff; 
       position: relative; 
       overflow: hidden;
@@ -73,6 +73,15 @@
       justify-content: space-between; align-items: center; padding: 0 20px;
       font-size: 17px; font-weight: bold; z-index: 5;
       flex-shrink: 0;
+      transition: background 0.3s ease;
+    }
+    #header.fever-mode {
+      background: linear-gradient(90deg, #ff4757, #ffa502);
+      animation: pulse 0.5s infinite alternate;
+    }
+    @keyframes pulse {
+      0% { opacity: 0.9; }
+      100% { opacity: 1; transform: scale(1.01); }
     }
     #play-area { flex: 1; position: relative; background: #f8f9fa; overflow: hidden; }
     .target {
@@ -83,6 +92,10 @@
     .score-popup {
       position: absolute; font-weight: bold; font-size: 24px; pointer-events: none;
       animation: floatUp 0.5s ease-out forwards; z-index: 8;
+    }
+    .score-popup.fever-pop {
+      font-size: 30px;
+      text-shadow: 0 0 5px rgba(255,255,255,0.8);
     }
     @keyframes floatUp {
       0% { opacity: 1; transform: translateY(0); }
@@ -101,7 +114,8 @@
       🖼️ 1번 구쥭이: <b>+5점</b> (느림)<br>
       🖼️ 2번 구쥭이: <b>+10점</b> (보통)<br>
       🖼️ 3번 구쥭이: <b>+20점</b> (광속)<br>
-      ⚠️ 유사품: <b style="color:#ff4757;">-50점</b> (함정!)
+      ⚠️ 개부장: <b style="color:#ff4757;">-50점</b> (함정!)<br><br>
+      🔥 <b>연속 7회 성공 시 3초간 FEVER TIME (1.5배)!</b>
     </p>
     <input type="text" id="nickname-input" placeholder="닉네임을 입력하세요" maxlength="8">
     <button id="start-btn">게임 시작!</button>
@@ -109,7 +123,7 @@
 
   <!-- 게임 헤더 및 진행 영역 -->
   <div id="header">
-    <div>점수: <span id="score-display">0</span></div>
+    <div id="header-status">점수: <span id="score-display">0</span></div>
     <div>남은시간: <span id="time-display">30</span>s</div>
   </div>
   <div id="play-area"></div>
@@ -131,6 +145,11 @@
   let spawnInterval = null;
   let nickname = '';
 
+  // 피버 타임 관련 변수
+  let comboCount = 0;
+  let isFever = false;
+  let feverTimeout = null;
+
   const startScreen = document.getElementById('start-screen');
   const gameOverScreen = document.getElementById('game-over-screen');
   const nicknameInput = document.getElementById('nickname-input');
@@ -142,6 +161,8 @@
   const playArea = document.getElementById('play-area');
   const finalScore = document.getElementById('final-score');
   const playerNameDisplay = document.getElementById('player-name-display');
+  const header = document.getElementById('header');
+  const headerStatus = document.getElementById('header-status');
 
   startBtn.addEventListener('click', startGame);
   restartBtn.addEventListener('click', () => {
@@ -149,9 +170,9 @@
     startScreen.classList.remove('hidden');
   });
 
-  // 클립보드 복사 기능 (닉네임 포함)
+  // 클립보드 복사 기능
   copyBtn.addEventListener('click', () => {
-    const textToCopy = `💥 [구쥭이 잡기] ${nickname}님의 최종 점수는 ${score}점 입니다! 너도 도전해봐! 💥`;
+    const textToCopy = `💥 [구쥭이 잡기] ${nickname}님의 최종 점수는 ${score}점 입니다! 야 너도 해 봐! 💥`;
     
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(textToCopy).then(() => alert('점수가 클립보드에 복사되었습니다! 🎉'));
@@ -175,9 +196,15 @@
 
     score = 0;
     timeLeft = 30;
+    comboCount = 0;
+    isFever = false;
+    if (feverTimeout) clearTimeout(feverTimeout);
+
     scoreDisplay.textContent = score;
     timeDisplay.textContent = timeLeft;
     playArea.innerHTML = '';
+    header.classList.remove('fever-mode');
+    headerStatus.innerHTML = `점수: <span id="score-display">${score}</span>`;
 
     startScreen.classList.add('hidden');
 
@@ -192,6 +219,23 @@
     spawnInterval = setInterval(spawnTarget, 400);
   }
 
+  function triggerFever() {
+    isFever = true;
+    comboCount = 0;
+    header.classList.add('fever-mode');
+    headerStatus.innerHTML = `🔥 FEVER! <span id="score-display">${score}</span>`;
+
+    if (feverTimeout) clearTimeout(feverTimeout);
+
+    // 3초 후 피버 종료
+    feverTimeout = setTimeout(() => {
+      isFever = false;
+      header.classList.remove('fever-mode');
+      const scoreElem = document.getElementById('score-display');
+      headerStatus.innerHTML = `점수: <span id="score-display">${score}</span>`;
+    }, 3000);
+  }
+
   function spawnTarget() {
     const target = document.createElement('div');
     target.classList.add('target');
@@ -203,31 +247,31 @@
     target.style.top = `${Math.random() * areaHeight}px`;
 
     const rand = Math.random();
-    let imageSrc, speed, points, color;
+    let imageSrc, speed, basePoints, color;
 
     if (rand < 0.25) { 
       // 1번: 5점 (느림 1.2초)
       imageSrc = 'rabbit1.png';
       speed = 1.2;
-      points = 5;
+      basePoints = 5;
       color = '#2ed573';
     } else if (rand < 0.55) { 
       // 2번: 10점 (보통 0.8초)
       imageSrc = 'rabbit2.png';
       speed = 0.8;
-      points = 10;
+      basePoints = 10;
       color = '#ffa502';
     } else if (rand < 0.80) { 
       // 3번: 20점 (광속 0.45초)
       imageSrc = 'rabbit3.png';
       speed = 0.45;
-      points = 20;
+      basePoints = 20;
       color = '#ff4757';
     } else { 
-      // 4번: -50점 (함정! 속도는 랜덤)
+      // 4번: -50점 (함정!)
       imageSrc = 'rabbit4.png';
       speed = [0.45, 0.8, 1.2][Math.floor(Math.random() * 3)];
-      points = -50;
+      basePoints = -50;
       color = '#2f3542';
     }
 
@@ -240,21 +284,42 @@
 
     target.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      score += points;
-      scoreDisplay.textContent = score;
 
-      const popupText = points > 0 ? `+${points}` : `${points}`;
-      showPopup(e.clientX, e.clientY, popupText, color);
+      let finalGainedPoints = basePoints;
+
+      if (basePoints > 0) {
+        // 성공했을 때
+        if (isFever) {
+          finalGainedPoints = basePoints * 1.5; // 피버 타임 1.5배 (7.5, 15, 30)
+        } else {
+          comboCount++;
+          if (comboCount >= 7) {
+            triggerFever();
+          }
+        }
+      } else {
+        // 함정(-50점)을 누른 경우: 콤보 초기화 및 -50점 고정 (피버 중이어도 1.5배 안 됨)
+        comboCount = 0;
+      }
+
+      score += finalGainedPoints;
+      const scoreElem = document.getElementById('score-display');
+      if (scoreElem) scoreElem.textContent = score;
+
+      const popupText = finalGainedPoints > 0 ? `+${finalGainedPoints}` : `${finalGainedPoints}`;
+      showPopup(e.clientX, e.clientY, popupText, color, isFever && basePoints > 0);
 
       clearTimeout(removeTimeout);
       target.remove();
     });
   }
 
-  function showPopup(x, y, text, color) {
+  function showPopup(x, y, text, color, isFeverPop) {
     const rect = playArea.getBoundingClientRect();
     const popup = document.createElement('div');
     popup.classList.add('score-popup');
+    if (isFeverPop) popup.classList.add('fever-pop');
+    
     popup.textContent = text;
     popup.style.color = color;
     popup.style.left = `${x - rect.left}px`;
@@ -267,7 +332,10 @@
   function endGame() {
     clearInterval(timer);
     clearInterval(spawnInterval);
+    if (feverTimeout) clearTimeout(feverTimeout);
+    
     playArea.innerHTML = '';
+    header.classList.remove('fever-mode');
 
     finalScore.textContent = score;
     playerNameDisplay.textContent = nickname;

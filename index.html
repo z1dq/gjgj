@@ -114,7 +114,7 @@
       🖼️ 1번 구쥭이: <b>+5점</b> (느림)<br>
       🖼️ 2번 구쥭이: <b>+10점</b> (보통)<br>
       🖼️ 3번 구쥭이: <b>+20점</b> (광속)<br>
-      ⚠️ 개부장: <b style="color:#ff4757;">-50점</b> (함정!)<br><br>
+      ⚠️ 개부장: <b style="color:#ff4757;">-30점</b> (함정!)<br><br>
       🔥 <b>연속 7회 성공 시 3초간 FEVER TIME (1.5배)!</b>
     </p>
     <input type="text" id="nickname-input" placeholder="닉네임을 입력하세요" maxlength="8">
@@ -268,10 +268,10 @@
       basePoints = 20;
       color = '#ff4757';
     } else { 
-      // 4번: -50점 (함정!)
+      // 4번: -30점 (함정!)
       imageSrc = 'rabbit4.png';
       speed = [0.45, 0.8, 1.2][Math.floor(Math.random() * 3)];
-      basePoints = -50;
+      basePoints = -30;
       color = '#2f3542';
     }
 
@@ -298,7 +298,7 @@
           }
         }
       } else {
-        // 함정(-50점)을 누른 경우: 콤보 초기화 및 -50점 고정 (피버 중이어도 1.5배 안 됨)
+        // 함정(-30점)을 누른 경우: 콤보 초기화 및 -30점 고정 (피버 중이어도 1.5배 안 됨)
         comboCount = 0;
       }
 
